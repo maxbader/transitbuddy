@@ -1,0 +1,7 @@
+<launch>   
+  <node pkg="humanflow_bridge" type="humanflow_bridge_node" name="human" output="screen">
+    <param name="frequency" value="5"/>
+    <param name="publish" type="bool" value="false"/>
+    <remap from="robot_pose" to="robot/human_pose" />
+  </node>  
+</launch>
