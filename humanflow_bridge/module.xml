@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mod:module name="HumanFlow_Bridge"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:mod="http://www.ait.ac.at/dts/moduleDefinition"
+	xmlns:sc="http://www.ait.ac.at/dts/pedestrianScenario" xmlns:scm="http://www.ait.ac.at/dts/pedestrianScenarioMetadata">
+
+	<description>HumanFlow_Bridge</description>
+	<authors>
+		<author>
+			<name>Martin Stubenschrott</name>
+			<email>martin.stubenschrott@ait.ac.at</email>
+		</author>
+		<author>
+			<name>Markus Bader</name>
+			<email>markus.bader@tuwien.ac.at</email>
+		</author>
+	</authors>
+	<settings>
+		<setting name="autoload" value="true"/>
+		<setting name="hidden" value="false"/>
+		<setting name="mainfile" value="Release/HumanFlow_Bridge.exe"/>
+	</settings>
+	<requiredMessages>
+		<requiredMessage>ADD_AGENTS</requiredMessage>
+		<requiredMessage>UPDATE_AGENTS</requiredMessage>
+		<requiredMessage>REMOVE_AGENTS</requiredMessage>
+	</requiredMessages>
+	<!--parameters>
+		<parameter name="stringParameter1">
+			<parameterType xsi:type="scm:StringParameterType" />
+			<parameterDefaultValue xsi:type="sc:StringParameterValue" value="blabla" />
+			<parameterDescription>example parameter of type string</parameterDescription>
+		</parameter>	
+		<parameter name="intParameter1">
+			<parameterType xsi:type="scm:IntegerParameterType" min="1" max="1000" />
+			<parameterDefaultValue xsi:type="sc:IntegerParameterValue" value="1" />
+			<parameterDescription>example parameter of type integer</parameterDescription>
+		</parameter>	
+	</parameters-->
+</mod:module>
