@@ -1,0 +1,2 @@
+How to run the robot publisher:
+rosrun transitbuddy_robot_publisher robot_publisher_node
