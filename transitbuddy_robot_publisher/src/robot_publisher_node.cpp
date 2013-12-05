@@ -43,7 +43,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-RobotPublisherNode::RobotPublisherNode(ros::NodeHandle & n) : n_ ( n ), n_param_ ( "~" ), frequency_ ( DEFAUTL_FRQ), publish_(false), frame_id_(DEFAULT_FRAME_ID) {
+RobotPublisherNode::RobotPublisherNode(ros::NodeHandle & n) : n_ ( n ), n_param_ ( "~" ), frequency_ ( DEFAUTL_FRQ), publish_(true), frame_id_(DEFAULT_FRAME_ID) {
         
     n_param_.getParam ( "frequency", frequency_ );
     ROS_INFO ( "frequency: %5.2f", frequency_ );
