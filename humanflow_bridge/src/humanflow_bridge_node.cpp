@@ -125,7 +125,7 @@ HumanflowBridgeNode::HumanflowBridgeNode(ros::NodeHandle & n, mped::MpedClientAP
 HumanflowBridgeNode::~HumanflowBridgeNode(){
 	}
 
-void HumanflowBridgeNode::robotPoseCallback(const humanflow_bridge::PoseWithIDArray::ConstPtr& msg){
+void HumanflowBridgeNode::robotPoseCallback(const humanflow_bridge::PoseWithIDArrayConstPtr& msg){
     ROS_INFO ( "robotPoseCallback");
 	
 	for (auto iter = msg->poses.begin(); iter != msg->poses.end(); iter++)
