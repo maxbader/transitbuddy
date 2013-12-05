@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 	else
 		cerr << "ROS_MASTER_URI: " << masterUri << endl;
 
-    ros::init ( argc, argv, "humanflow_bridge" );
+    ros::init ( argc, argv, "human_publisher" );
 	cout << "Creating Handle" << endl;
 	ros::NodeHandle n;
 	cout << "Creating Bridge" << endl;
@@ -95,8 +95,9 @@ int main(int argc, char **argv)
 		bridge.handleMpedMessage(*msg);
 		mpedController.sendDoneMessage();
 		delete msg;
-
+		
         ros::spinOnce();
+		//rate.sleep();
     }
     return 0;
 }
@@ -106,8 +107,9 @@ HumanflowBridgeNode::HumanflowBridgeNode(ros::NodeHandle & n, mped::MpedClientAP
 		n_param_ ( "~" ),
 		frequency_ ( DEFAULT_FRQ),
 		publish_(true),
-		frame_id_(DEFAULT_FRAME_ID),
-		mpedController(mpedController) {
+		frame_id_(DEFAULT_FRAME_ID) {
+
+	mpedController = controller;
 	
     n_param_.getParam ( "frequency", frequency_ );
     ROS_INFO ( "frequency: %5.2f", frequency_ );
@@ -128,35 +130,42 @@ HumanflowBridgeNode::~HumanflowBridgeNode(){
 void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDArrayConstPtr& msg){
     ROS_INFO ( "robotPoseCallback");
 	
-	for (auto iter = msg->poses.begin(); iter != msg->poses.end(); iter++)
+	//for (auto iter = msg->poses.begin(); iter != msg->poses.end(); iter++)
+	for (unsigned int i=0; i < msg->poses.size(); i++)
 	{
 		// TODO: Ignore agents from other section
-		long id = iter->id;
+		long id = msg->poses[i].id + ROBOT_ID_OFFSET;
 		if (std::find(robotIds.begin(), robotIds.end(), id) == robotIds.end()) {
 			// No robot added yet, do it now
 			ROS_INFO("adding robot: %d", id);
-			mped::MpedMessage *msg = mpedController.createMessage("ADD_AGENTS");
+			mped::MpedMessage *addAgentsMessage = mpedController.createMessage("ADD_AGENTS");
 			vector<long> newIds;
 			newIds.push_back(id);
-			msg->setLongArray("ids", newIds);
+			addAgentsMessage->setLongArray("ids", newIds);
 			stringstream section;
 			section << "s" << id;
-			msg->setLong(section.str(), sectionId);
+			addAgentsMessage->setLong(section.str(), sectionId);
 			stringstream type;
 			type << "t" << id;
-			msg->setString(type.str(), "robot");
-			mpedController.sendMessage(msg);
-			delete msg;
+			addAgentsMessage->setString(type.str(), "robot");
+			stringstream radius;
+			radius << "ra" << id;
+			addAgentsMessage->setDouble(radius.str(), 0.25);
+			stringstream color;
+			color << "color" << id;
+			addAgentsMessage->setString(color.str(), "#0000FF");
+			mpedController.sendMessage(addAgentsMessage);
+			delete addAgentsMessage;
 
 			// save the id
 			robotIds.push_back(id);
 		}
 
 		// Update position
-		mped::MpedMessage *msg = mpedController.createMessage("UPDATE_AGENTS");
+		mped::MpedMessage *updateAgentMsg = mpedController.createMessage("UPDATE_AGENTS");
 		vector<long> newIds;
 		newIds.push_back(id);
-		msg->setLongArray("ids", newIds);
+		updateAgentMsg->setLongArray("ids", newIds);
 		//stringstream section;
 		//section << "s" << id;
 		//msg->setLong(section.str(), sectionId);
@@ -166,18 +175,19 @@ void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDA
 		stringstream posKey;
 		posKey << "p" << id;
 		vector<double> pos;
-		pos.push_back(iter->pose.position.x);
-		pos.push_back(iter->pose.position.y);
-		pos.push_back(iter->pose.position.z);
-		msg->setDoubleArray(posKey.str(), pos);
-		mpedController.sendMessage(msg);
-		delete msg;
+		pos.push_back(msg->poses[i].pose.position.x);
+		pos.push_back(msg->poses[i].pose.position.y);
+		pos.push_back(msg->poses[i].pose.position.z);
+		updateAgentMsg->setDoubleArray(posKey.str(), pos);
+		mpedController.sendMessage(updateAgentMsg);
+		delete updateAgentMsg;
 	}
 
-	for (auto iter = robotIds.begin(); iter != robotIds.end(); iter++) {
+	for (unsigned int i=0; i < robotIds.size(); i++) {
+		long robotId = robotIds[i];
 		bool hasPose = false;
 		for (auto posesIter = msg->poses.begin(); posesIter != msg->poses.end(); posesIter++) {
-			if (posesIter->id == *iter) {
+			if (posesIter->id + ROBOT_ID_OFFSET == robotId) {
 				hasPose = true;
 				break;
 			}
@@ -185,13 +195,13 @@ void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDA
 
 		if (hasPose == false) {
 			// Robot does not exist anymore, remove it from the simulation
-			ROS_INFO("removing robot: %d", *iter);
-			mped::MpedMessage *msg = mpedController.createMessage("REMOVE_AGENTS");
+			ROS_INFO("removing robot: %d", robotId);
+			mped::MpedMessage *removeAgentsMsg = mpedController.createMessage("REMOVE_AGENTS");
 			vector<long> newIds;
-			newIds.push_back(*iter);
-			msg->setLongArray("ids", newIds);
-			mpedController.sendMessage(msg);
-			delete msg;
+			newIds.push_back(robotId);
+			removeAgentsMsg->setLongArray("ids", newIds);
+			mpedController.sendMessage(removeAgentsMsg);
+			delete removeAgentsMsg;
 
 			// TODO: Remove value from robotIds so it can be used again
 		}
@@ -203,6 +213,7 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 	{
 		//onInit(msg);
 		sectionId = mpedController.getAssociatedSection();
+		ROS_DEBUG("Module associated with section %d", sectionId);
 		if (sectionId == 0)
 			mpedController.warn("Module is not associated with a section! It should be moved to the section where the robot is created");
 	}
@@ -213,6 +224,10 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 		// and send the info to the ROS server
 		if (step % 10 == 0)
 			publishHumanPose();
+		/*if (step == 100) {
+			//transitbuddy_msgs::PoseWithIDArrayConstPtr callbackMsg;
+			robotPoseCallback(Constposes);
+		}*/
 	}
 	else if (msg.isShutdownMessage())
 	{
