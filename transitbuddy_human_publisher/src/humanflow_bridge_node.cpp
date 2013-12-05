@@ -119,13 +119,13 @@ HumanflowBridgeNode::HumanflowBridgeNode(ros::NodeHandle & n, mped::MpedClientAP
     ROS_INFO ( "frame_id: %s", frame_id_.c_str() );
     
 	sub_ = n_.subscribe( NAME_SUB, 1, &HumanflowBridgeNode::robotPoseCallback, this );
-	pub_ = n_param_.advertise<humanflow_bridge::PoseWithIDArray> ( "human_pose", 1 );
+	pub_ = n_param_.advertise<transitbuddy_msgs::PoseWithIDArray> ( "human_pose", 1 );
 }
 
 HumanflowBridgeNode::~HumanflowBridgeNode(){
 	}
 
-void HumanflowBridgeNode::robotPoseCallback(const humanflow_bridge::PoseWithIDArrayConstPtr& msg){
+void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDArrayConstPtr& msg){
     ROS_INFO ( "robotPoseCallback");
 	
 	for (auto iter = msg->poses.begin(); iter != msg->poses.end(); iter++)
