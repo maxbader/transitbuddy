@@ -32,18 +32,26 @@
 #include <humanflow_bridge/humanflow_bridge_defaults.h>
 #include <humanflow_bridge/PoseWithIDArray.h>
 
+#include "mpedplus/MpedClientAPI.h"
+#include "mpedplus/MpedMessage.h"
 
 class HumanflowBridgeNode {
 	
 	public:
-		HumanflowBridgeNode(ros::NodeHandle & n);
+		HumanflowBridgeNode(ros::NodeHandle & n, mped::MpedClientAPI &mpedController);
 		~HumanflowBridgeNode();
 		void robotPoseCallback(const humanflow_bridge::PoseWithIDArray::ConstPtr& msg);
 		double frequency() {
 			return frequency_;
 		}
   		void publishHumanPose();
+		void handleMpedMessage(mped::MpedMessage &msg);
+
 	private:
+		vector<long> robotIds;
+		long sectionId;
+		humanflow_bridge::PoseWithIDArray poses;
+
 		ros::NodeHandle n_;
 		ros::NodeHandle n_param_;
 		double frequency_;
@@ -52,7 +60,7 @@ class HumanflowBridgeNode {
   		ros::Subscriber sub_;
 		ros::Publisher pub_;
   		
-
+		mped::MpedClientAPI mpedController;
 };
 
 #endif // HUMANFLOW_BRIDGE_H

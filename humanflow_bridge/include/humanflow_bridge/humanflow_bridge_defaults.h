@@ -29,7 +29,10 @@
 #define HUMANFLOW_BRIDGE_DEFAULTS_H
 
 #define NAME_SUB "robot_pose"
-#define DEFAUTL_FRQ 10
+#define DEFAULT_FRQ 1
 #define DEFAULT_FRAME_ID "world"
+
+#define MPED_URL "tcp://localhost:61616"
+#define MPED_INSTANCE_ID "HumanFlow_Bridge"
 
 #endif // HUMANFLOW_BRIDGE_DEFAULTS_H
