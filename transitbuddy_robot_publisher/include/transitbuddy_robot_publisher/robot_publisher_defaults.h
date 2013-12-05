@@ -28,10 +28,9 @@
 #ifndef ROBOT_PUBLISHER_DEFAULTS_H
 #define ROBOT_PUBLISHER_DEFAULTS_H
 
-#define NAME_SUB "human_pose"
+#define NAME_SUB "human_publisher/human_pose"
 #define NAME_PUB "robot_pose"
 #define DEFAUTL_FRQ 10
 #define DEFAULT_FRAME_ID "world"
-#define ROBOT_START_ID 100000
 
 #endif // ROBOT_PUBLISHER_DEFAULTS_H

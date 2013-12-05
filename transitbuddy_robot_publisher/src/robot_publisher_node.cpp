@@ -63,15 +63,14 @@ RobotPublisherNode::~RobotPublisherNode(){
 }
 
 void RobotPublisherNode::callbackHumanPose(const transitbuddy_msgs::PoseWithIDArray::ConstPtr& msg){
-    ROS_INFO ( "robotPoseCallback");
+    ROS_INFO ( "%i human pose received: ", msg->poses.size());
 }
 
 void RobotPublisherNode::publishRobotPose(){
     if(publish_ == false) return;
-    ROS_INFO ( "publishHumanPose");
     transitbuddy_msgs::PoseWithIDArray poses;
     robotPoses_.header.seq++;
-    if(robotPoses_.header.seq % 100 == 0) ROS_INFO ( "publishHumanPose %i", robotPoses_.header.seq);
+    if(robotPoses_.header.seq % 10 == 0) ROS_INFO ( "publish robot pose %i", robotPoses_.header.seq);
     poses.header.stamp = ros::Time::now();
     poses.header.frame_id = frame_id_;
     poses.poses.resize(1);
