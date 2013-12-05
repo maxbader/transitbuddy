@@ -31,7 +31,7 @@
 int main(int argc, char **argv)
 {
         
-    ros::init ( argc, argv, "humanflow_bridge" );
+    ros::init ( argc, argv, "robot_publisher" );
     ros::NodeHandle n;
     RobotPublisherNode bridge ( n );
     ros::Rate rate ( bridge.frequency() );
