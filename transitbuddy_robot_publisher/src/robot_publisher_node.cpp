@@ -54,6 +54,7 @@ RobotPublisherNode::RobotPublisherNode(ros::NodeHandle & n) : n_ ( n ), n_param_
     n_param_.getParam ( "frame_id", frame_id_ );
     ROS_INFO ( "frame_id: %s", frame_id_.c_str() );
     
+    robotPoses_.header.seq = 0;
     sub_ = n_.subscribe( NAME_SUB, 1, &RobotPublisherNode::callbackHumanPose, this );
     pub_ = n_param_.advertise<transitbuddy_msgs::PoseWithIDArray> ( NAME_PUB, 1 );
 }
@@ -69,14 +70,15 @@ void RobotPublisherNode::publishRobotPose(){
     if(publish_ == false) return;
     ROS_INFO ( "publishHumanPose");
     transitbuddy_msgs::PoseWithIDArray poses;
+    robotPoses_.header.seq++;
+    if(robotPoses_.header.seq % 100 == 0) ROS_INFO ( "publishHumanPose %i", robotPoses_.header.seq);
     poses.header.stamp = ros::Time::now();
     poses.header.frame_id = frame_id_;
-    poses.poses.resize(2);
-    poses.poses[0].id = 10;
+    poses.poses.resize(1);
+    poses.poses[0].id = 0;
     poses.poses[0].valid = true;
-    poses.poses[0].pose.position.x = -12.0;
-    poses.poses[1].id = 12;
-    poses.poses[1].valid = false;
-    poses.poses[1].pose.position.x = 24.0;
+    double s = robotPoses_.header.seq;
+    poses.poses[0].pose.position.x = -12.0+s*0.1;
+    poses.poses[0].pose.position.y = sin(0.1*s);
     pub_.publish(poses);
 }

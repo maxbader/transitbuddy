@@ -50,6 +50,7 @@ class RobotPublisherNode {
                 std::string frame_id_;
                   ros::Subscriber sub_;
                 ros::Publisher pub_;
+                transitbuddy_msgs::PoseWithIDArray robotPoses_;
                   
 
 };

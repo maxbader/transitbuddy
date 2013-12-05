@@ -32,5 +32,6 @@
 #define NAME_PUB "robot_pose"
 #define DEFAUTL_FRQ 10
 #define DEFAULT_FRAME_ID "world"
+#define ROBOT_START_ID 100000
 
 #endif // ROBOT_PUBLISHER_DEFAULTS_H
