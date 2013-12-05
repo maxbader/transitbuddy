@@ -60,7 +60,7 @@ HumanflowBridgeNode::HumanflowBridgeNode(ros::NodeHandle & n) : n_ ( n ), n_para
 HumanflowBridgeNode::~HumanflowBridgeNode(){
 	}
 
-void HumanflowBridgeNode::robotPoseCallback(const humanflow_bridge::PoseWithIDArray::ConstPtr& msg){
+void HumanflowBridgeNode::robotPoseCallback(const humanflow_bridge::PoseWithIDArrayConstPtr& msg){
     ROS_INFO ( "robotPoseCallback");
 }
 

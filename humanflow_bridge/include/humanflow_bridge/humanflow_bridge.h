@@ -38,7 +38,7 @@ class HumanflowBridgeNode {
 	public:
 		HumanflowBridgeNode(ros::NodeHandle & n);
 		~HumanflowBridgeNode();
-		void robotPoseCallback(const humanflow_bridge::PoseWithIDArray::ConstPtr& msg);
+		void robotPoseCallback(const humanflow_bridge::PoseWithIDArrayConstPtr& msg);
 		double frequency() {
 			return frequency_;
 		}
