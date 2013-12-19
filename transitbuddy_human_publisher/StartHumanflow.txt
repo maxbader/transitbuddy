@@ -1,0 +1,5 @@
+Simulation starten
+
+set ROS_MASTER_URI=http://192.168.5.1:11311
+cd 
+C:\Users\ros\Documents\simulator\simulator\simulator.exe
