@@ -1,0 +1,42 @@
+Enviroment Variables:
+	export PROJECTS=${HOME}/projects
+	export GAZEBO_PLUGIN_PATH=${PROJECTS}/catkin_forks/devel/lib/:${GAZEBO_PLUGIN_PATH}
+	export GAZEBO_PLUGIN_PATH=${PROJECTS}/catkin_v4r_gazebo/devel/lib/:${GAZEBO_PLUGIN_PATH}
+	export GAZEBO_MODEL_PATH=${PROJECTS}/catkin_v4r_gazebo/src/v4r_gazebo/models/:${GAZEBO_MODEL_PATH}
+
+SOURCE:
+	source ${PROJECTS}/catkin_v4r_gazebo/devel/setup.bash
+	source ${PROJECTS}/catkin_forks/devel/setup.bash
+
+Simulation:
+	roslaunch v4r_gazebo all.launch
+	roslaunch v4r_gazebo reset_robot.launch  # --> rest's the robots pose
+
+Gmapping:
+	rosrun gmapping slam_gmapping scan:=/pioneer2dx/laser/scan
+	---> visualize the map with rviz
+	
+Robot Control:
+	rosrun v4r_control v4r_control_node cmd_vel:=/pioneer2dx/cmd_vel _control_mode:=teleop _velocity_forward:=0.2 _velocity_angular:=0.2
+
+Save Map:
+    rosrun map_server map_saver -f recorded_map
+    
+Retouch Map (gimp)
+	gimp recorded_map.png  
+	--> change canvas size
+	--> save it as retouched_map.png
+	gedit recorded_map.yaml
+	--> ajust map file
+	--> ajust center
+	
+Load Map:
+	stopp gmapping
+	rosrun map_server map_server recorded_map.yaml
+	
+Start localization
+	amcl scan:=/pioneer2dx/laser/scan
+	--> switch in rviz to a the map frame
+	--> select 2D Pose estimate and point to the real robot pose on the map
+	--> now you can use the v4r_control to drive 
+	--> visualize the pose array in rviz

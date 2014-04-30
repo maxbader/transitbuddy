@@ -28,9 +28,13 @@
 #ifndef ROBOT_PUBLISHER_DEFAULTS_H
 #define ROBOT_PUBLISHER_DEFAULTS_H
 
-#define NAME_SUB "human_publisher/human_pose"
-#define NAME_PUB "robot_pose"
+#define NAME_SUB_HUMANS "human_publisher/human_pose"
+#define NAME_SUB_GAZEBO_MODELS "/gazebo/model_states"
+#define NAME_PUB_ROBOTS "robot_pose"
 #define DEFAUTL_FRQ 10
 #define DEFAULT_FRAME_ID "world"
+#define OFFSET_X -132.0
+#define OFFSET_Y -109.0
+#define OFFSET_ALPHA  0
 
 #endif // ROBOT_PUBLISHER_DEFAULTS_H

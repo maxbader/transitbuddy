@@ -44,7 +44,18 @@ int main(int argc, char **argv)
 }
 
 RobotPublisherNode::RobotPublisherNode(ros::NodeHandle & n) : n_ ( n ), n_param_ ( "~" ), frequency_ ( DEFAUTL_FRQ), publish_(true), frame_id_(DEFAULT_FRAME_ID) {
-        
+
+    offset_map_.position.x = OFFSET_X;
+    offset_map_.position.y = OFFSET_Y;
+
+    if(!n_param_.getParam ( "ox", offset_map_.position.x )){
+    	n_param_.setParam ( "ox", offset_map_.position.x);
+    }
+    ROS_INFO ( "ox: %5.2f", offset_map_.position.x);
+    if(!n_param_.getParam ( "oy", offset_map_.position.y )){
+    	n_param_.setParam ( "oy", offset_map_.position.y);
+    }
+    ROS_INFO ( "oy: %5.2f", offset_map_.position.y);
     n_param_.getParam ( "frequency", frequency_ );
     ROS_INFO ( "frequency: %5.2f", frequency_ );
     
@@ -55,8 +66,9 @@ RobotPublisherNode::RobotPublisherNode(ros::NodeHandle & n) : n_ ( n ), n_param_
     ROS_INFO ( "frame_id: %s", frame_id_.c_str() );
     
     robotPoses_.header.seq = 0;
-    sub_ = n_.subscribe( NAME_SUB, 1, &RobotPublisherNode::callbackHumanPose, this );
-    pub_ = n_param_.advertise<transitbuddy_msgs::PoseWithIDArray> ( NAME_PUB, 1 );
+    sub_ = n_.subscribe( NAME_SUB_HUMANS, 1, &RobotPublisherNode::callbackHumanPose, this );
+    sub_ = n_.subscribe( NAME_SUB_GAZEBO_MODELS, 1, &RobotPublisherNode::callbackGazeboModel, this );
+    pub_ = n_param_.advertise<transitbuddy_msgs::PoseWithIDArray> ( NAME_PUB_ROBOTS, 1 );
 }
 
 RobotPublisherNode::~RobotPublisherNode(){
@@ -66,18 +78,29 @@ void RobotPublisherNode::callbackHumanPose(const transitbuddy_msgs::PoseWithIDAr
     ROS_INFO ( "%i human pose received: ", msg->poses.size());
 }
 
+void RobotPublisherNode::callbackGazeboModel(const gazebo_msgs::ModelStates::ConstPtr& msg){
+	n_param_.getParam ( "ox", offset_map_.position.x );
+	n_param_.getParam ( "oy", offset_map_.position.x );
+	for(int i = 0; i < msg->name.size(); i++){
+		std::string name( msg->name[i]);
+		if (name.compare("p2dx") == 0){
+			robotPoses_.poses.resize(1);
+		    ROS_INFO ( "robot: %s, %f,%f,%f", name.c_str(), msg->pose[i].position.x, msg->pose[i].position.y, 0 );
+		    robotPoses_.poses[0].pose.position.x = msg->pose[i].position.x + offset_map_.position.x ;
+		    robotPoses_.poses[0].pose.position.y = msg->pose[i].position.y + offset_map_.position.y;
+		}
+	}
+
+}
 void RobotPublisherNode::publishRobotPose(){
     if(publish_ == false) return;
-    transitbuddy_msgs::PoseWithIDArray poses;
-    robotPoses_.header.seq++;
+    transitbuddy_msgs::PoseWithIDArray &poses = robotPoses_;
+    poses.header.seq++;
     if(robotPoses_.header.seq % 10 == 0) ROS_INFO ( "publish robot pose %i", robotPoses_.header.seq);
     poses.header.stamp = ros::Time::now();
     poses.header.frame_id = frame_id_;
     poses.poses.resize(1);
     poses.poses[0].id = 0;
     poses.poses[0].valid = true;
-    double s = robotPoses_.header.seq;
-    poses.poses[0].pose.position.x = -12.0+s*0.1;
-    poses.poses[0].pose.position.y = sin(0.1*s);
     pub_.publish(poses);
 }

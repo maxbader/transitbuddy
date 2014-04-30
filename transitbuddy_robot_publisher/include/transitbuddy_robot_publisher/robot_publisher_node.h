@@ -29,6 +29,8 @@
 #define ROBOT_PUBLISHER_NODE_H
 
 #include "ros/ros.h"
+#include <gazebo_msgs/ModelStates.h>
+#include <geometry_msgs/Pose.h>
 #include <transitbuddy_msgs/PoseWithIDArray.h>
 #include <transitbuddy_robot_publisher/robot_publisher_defaults.h>
 
@@ -38,6 +40,7 @@ class RobotPublisherNode {
                 RobotPublisherNode(ros::NodeHandle & n);
                 ~RobotPublisherNode();
                 void callbackHumanPose(const transitbuddy_msgs::PoseWithIDArray::ConstPtr& msg);
+                void callbackGazeboModel(const gazebo_msgs::ModelStates::ConstPtr& msg);
                 double frequency() {
                         return frequency_;
                 }
@@ -48,9 +51,11 @@ class RobotPublisherNode {
                 double frequency_;
                 bool publish_;
                 std::string frame_id_;
-                  ros::Subscriber sub_;
+                ros::Subscriber sub_;
+                ros::Subscriber subGazebo_;
                 ros::Publisher pub_;
                 transitbuddy_msgs::PoseWithIDArray robotPoses_;
+                geometry_msgs::Pose offset_map_;
                   
 
 };

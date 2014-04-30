@@ -4,7 +4,7 @@ project(transitbuddy_robot_publisher)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs genmsg geometry_msgs transitbuddy_msgs)
+find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs genmsg geometry_msgs transitbuddy_msgs gazebo_msgs)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
