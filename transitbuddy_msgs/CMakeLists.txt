@@ -46,6 +46,8 @@ add_message_files(
   FILES   
   PoseWithID.msg 
   PoseWithIDArray.msg
+  LineWithID.msg 
+  LineWithIDArray.msg
 )
 
 ## Generate services in the 'srv' folder

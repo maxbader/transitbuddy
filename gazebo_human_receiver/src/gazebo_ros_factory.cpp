@@ -1,5 +1,5 @@
 
-#include <v4r_gazebo/gazebo_ros_factory.h>
+#include <gazebo_human_receiver/gazebo_ros_factory.h>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -7,11 +7,16 @@ namespace gazebo
 {
 
 // Constructor
-GazeboRosFactory::GazeboRosFactory() {}
+GazeboRosFactory::GazeboRosFactory(): reconfigureServer_(ros::NodeHandle("GazeboRosFactory")) {}
 
 // Destructor
 GazeboRosFactory::~GazeboRosFactory() {}
 
+void GazeboRosFactory::callbackParameters ( gazebo_human_receiver::human_receiverConfig &config, uint32_t level ){
+  map_offset_x_ = config.map_offset_x;
+  map_offset_y_ = config.map_offset_y;
+  map_offset_angle_ = config.map_offset_angle;
+}
 
 void GazeboRosFactory::Load(physics::WorldPtr _parent, sdf::ElementPtr _sdf)
 {
@@ -25,19 +30,13 @@ void GazeboRosFactory::Load(physics::WorldPtr _parent, sdf::ElementPtr _sdf)
     subHumanPose_ = rosnode_->subscribe( "/human_publisher/human_pose", 1, &GazeboRosFactory::poseCallback, this );
     subCommand_ = rosnode_->subscribe( "/transitbuddy_dummy/command", 1, &GazeboRosFactory::commandCallback, this );
 
-    n_param_->param<double> ( "offsetX", offsetX_, 133.0 );
-    n_param_->param<double> ( "offsetY", offsetY_, 109.0 );
-    n_param_->param<double> ( "offsetAlpha", offsetAlpha_, 0.0 );
-    ROS_INFO ( "offset: %6.3f m, %6.3f m, %6.3f rad", offsetX_, offsetY_, offsetAlpha_ );
-    //n_param_->setParam( "offsetX", offsetX_ );
-    //n_param_->setParam( "offsetY", offsetY_ );
-    //n_param_->setParam( "offsetAlpha", offsetAlpha_ );
-
     addThread_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::addTheadFnc, this));
     removeThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::removeTheadFnc, this));
     updateThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::updateHumansFnc, this));
 
-    double offsetX, offsetY, offsetAlpa;
+    reconfigureFnc_ = boost::bind(&GazeboRosFactory::callbackParameters, this,  _1, _2);
+    reconfigureServer_.setCallback(reconfigureFnc_);
+    
 }
 
 
@@ -163,12 +162,6 @@ void GazeboRosFactory::addTheadFnc() {
 void GazeboRosFactory::removeTheadFnc() {
     while(true) {
 
-        n_param_->getParam( "offsetX", offsetX_);
-        n_param_->getParam("offsetY", offsetY_);
-        n_param_->getParam("offsetAlpha", offsetAlpha_);
-        ROS_INFO ( "offset: %6.3fm, %6.3fm, %6.3frad", offsetX_, offsetY_, offsetAlpha_ );
-
-
         sleep(2);
         boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutex_);
         std::stringstream ss;
@@ -208,14 +201,14 @@ void GazeboRosFactory::updateHumansFnc() {
         usleep(10000);
         boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutex_);
         math::Pose pose(0,0,0,0,0,0);
-        double ca = cos(offsetAlpha_), sa = sin(offsetAlpha_);
+        double ca = cos(map_offset_angle_), sa = sin(map_offset_angle_);
         std::list<int> unused = humansInWorld_;
         for(std::size_t i = 0; i < msgHumans.poses.size(); i++) {
             int id = msgHumans.poses[i].id;
             unused.remove(id);
             const geometry_msgs::Point &pos = msgHumans.poses[i].pose.position;
-            double xw = ca * pos.x - sa * pos.y + offsetX_;
-            double yw = sa * pos.x + ca * pos.y + offsetY_;
+            double xw = ca * pos.x - sa * pos.y + map_offset_x_;
+            double yw = sa * pos.x + ca * pos.y + map_offset_y_;
             double zw = 0.0;
             math::Pose poseModel(xw, yw, zw, 0, 0,0);
             physics::ModelPtr p  = getHuman(id);
@@ -224,13 +217,12 @@ void GazeboRosFactory::updateHumansFnc() {
                 //p = this->world_->GetModel(modelName);
             } else {
                 const math::Pose &current =  p->GetWorldPose();
+                math::Vector3 diff = poseModel.pos - current.pos;
                 if(fabs(current.rot.x) + fabs(current.rot.y) + fabs(current.rot.z) < 0.01) {
-                    math::Vector3 diff = poseModel.pos - current.pos;
                     p->SetLinearVel(math::Vector3(diff.x, diff.y, -0));
                 } else {
-                    p->SetWorldPose(math::Pose(poseModel.pos.x, poseModel.pos.y, 0, 0,0,0));
-                    p->SetLinearVel(math::Vector3::Zero);
-                    p->SetLinearAccel(math::Vector3::Zero);
+                    p->SetWorldPose(math::Pose(current.pos.x, current.pos.y, 0, 0,0,0));
+                    p->SetLinearVel(math::Vector3(diff.x, diff.y, -0));
                 }
             }
             //p->SetWorldPose(poseModel);

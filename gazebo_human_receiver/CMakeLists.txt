@@ -65,6 +65,7 @@ catkin_package(
    CATKIN_DEPENDS geometry_msgs std_msgs
    LIBRARIES lib
    v4r_gazebo_ros_factory
+   v4r_gazebo_ros_del_obj
 #  DEPENDS system_lib
 )
 
@@ -95,8 +96,11 @@ link_directories(
 #add_executable(joint_publisher src/joint_publisher.cpp)
 add_library(gazebo_ros_human_receiver src/gazebo_ros_factory.cpp)
 
+add_library(factory_and_fini src/factory_and_fini.cpp)
+
 
 target_link_libraries(gazebo_ros_human_receiver  ${catkin_LIBRARIES})
+target_link_libraries(factory_and_fini  ${catkin_LIBRARIES})
 
 #############
 ## Install ##
