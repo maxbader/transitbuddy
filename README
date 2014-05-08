@@ -1,2 +1,8 @@
+Ubuntu virtual machine:
+user: ros
+pwd: superman
+
 How to run the robot publisher:
+
+roscore &
 rosrun transitbuddy_robot_publisher robot_publisher_node

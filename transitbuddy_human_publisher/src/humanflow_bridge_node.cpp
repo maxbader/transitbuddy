@@ -33,9 +33,13 @@
 
 #include "ros/ros.h"
 #include <humanflow_bridge/humanflow_bridge.h>
+#include <transitbuddy_msgs/LineWithIDArray.h>
 
 #include "mpedplus/MpedMessage.h"
 #include "mpedplus/MpedClientAPI.h"
+#include "mpedplus/Section.h"
+#include "mpedplus/Region.h"
+#include "mpedplus/Shape.h"
 
 int main(int argc, char **argv)
 {
@@ -216,6 +220,8 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 		ROS_DEBUG("Module associated with section %d", sectionId);
 		if (sectionId == 0)
 			mpedController.warn("Module is not associated with a section! It should be moved to the section where the robot is created");
+
+		publishInfrastructurePose();
 	}
 	else if (msg.isNextStepMessage())
 	{
@@ -312,4 +318,75 @@ void HumanflowBridgeNode::publishHumanPose() {
     poses.header.stamp = ros::Time::now();
     poses.header.frame_id = frame_id_;
 	pub_.publish(poses);
+}
+
+/**
+ * Publish all obstruction lines which helps synchronizing the infrastructure
+ */
+void HumanflowBridgeNode::publishInfrastructurePose() {
+	if(publish_ == false) return;
+
+	long sectionId = mpedController.getAssociatedSection();
+	transitbuddy_msgs::LineWithIDArray lines;
+    poses.header.stamp = ros::Time::now();
+    poses.header.frame_id = frame_id_;
+
+	// Add all obstruction lines here
+	mped::Section *section = mpedController.getInfrastructureSection(sectionId);
+	if (section == NULL)
+		return; // No associated section
+
+	long lineId = 1000;
+	std::vector<long> obstructionRegions = section->getObstructionRegions();
+	for (auto regionId = obstructionRegions.begin(); regionId != obstructionRegions.end(); regionId++)
+	{
+		mped::Region* region = mpedController.getInfrastructureRegion(*regionId);
+		if (region != NULL)
+		{
+			std::vector<long> shapeIds = region->getShapes();
+			for (auto shapeId = shapeIds.begin(); shapeId != shapeIds.end(); shapeId++)
+			{
+				mped::Shape* shape = mpedController.getInfrastructureShape(*shapeId);
+				if (shape != NULL) {
+					std::vector<double> x = shape->getX();
+					std::vector<double> y = shape->getY();
+					double z = shape->getZ();
+					for (unsigned int i=0; i < x.size(); i++) {
+						int endIndex=i+1;
+						transitbuddy_msgs::LineWithID line;
+						geometry_msgs::Point start;
+						geometry_msgs::Point end;
+						if (i == x.size()-1) // The last point: For polygons, wrap around
+						{
+							if (shape->getType() == "polygon")
+								endIndex = 0;
+							else
+								break;
+						}
+						
+						start.x = x[i];
+						start.y = y[i];
+						start.z = z;
+						end.x = x[endIndex];
+						end.y = y[endIndex];
+						end.z = z;
+
+						line.id = lineId++;
+						line.p.push_back(start);
+						line.p.push_back(end);
+						lines.lines.push_back(line);
+						// cout << "x:" << x.at(i) << " ";
+						// cout << "y:" << y.at(i) << " ";
+						// cout << endl;
+					}
+					delete shape;
+				}
+			}
+		}
+		delete region;
+	}
+	delete section;
+
+	ROS_DEBUG("publishInfrastructurePose: %d lines", lines.lines.size());
+	pub_.publish(lines);
 }

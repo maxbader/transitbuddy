@@ -45,6 +45,7 @@ class HumanflowBridgeNode {
 			return frequency_;
 		}
   		void publishHumanPose();
+		void publishInfrastructurePose();
 		void handleMpedMessage(mped::MpedMessage &msg);
 
 	private:
