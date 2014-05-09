@@ -36,6 +36,9 @@
 
 #include "mpedplus/MpedMessage.h"
 #include "mpedplus/MpedClientAPI.h"
+#include "mpedplus/Section.h"
+#include "mpedplus/Region.h"
+#include "mpedplus/Shape.h"
 
 int main(int argc, char **argv)
 {
@@ -55,10 +58,11 @@ int main(int argc, char **argv)
 		cout << " run in debug mode " << endl;
 		mpedController.debugRun(MPED_URL, modDescrString, MPED_INSTANCE_ID, "");
 	} else if (argc >= 3) { // only instance uid (& framework url) is given
-		cout << argv[1] << " " << argv[2] << endl;
-
+		std::string url(argv[1]);
+		std::string instanceName(argv[2]);
+		cout << url << " " << instanceName << endl;
 		// run
-		mpedController.run(argv[1], argv[2], "");
+		mpedController.run(url, instanceName, "");
 	} else {
 		cout << "Invalid number or arguments: Must be 0 or 2" << endl;
 		exit(EXIT_FAILURE);
@@ -218,18 +222,18 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 		ROS_DEBUG("Module associated with section %d", sectionId);
 		if (sectionId == 0)
 			mpedController.warn("Module is not associated with a section! It should be moved to the section where the robot is created");
+
+		publishInfrastructurePose();
 	}
 	else if (msg.isNextStepMessage())
 	{
 		//onNextStep(msg->getLong("step"), msg->getDouble("stepDuration"), msg->getDouble("simulationDuration"));
 		long step = msg.getLong("step");
 		// and send the info to the ROS server
-		if (step % 10 == 0)
+		if (step % 2 == 0) // Every second
 			publishHumanPose();
-		/*if (step == 100) {
-			//transitbuddy_msgs::PoseWithIDArrayConstPtr callbackMsg;
-			robotPoseCallback(Constposes);
-		}*/
+		if (step % 100 == 0) // Every 10 seconds
+			publishInfrastructurePose();
 	}
 	else if (msg.isShutdownMessage())
 	{
@@ -315,4 +319,78 @@ void HumanflowBridgeNode::publishHumanPose() {
     poses.header.stamp = ros::Time::now();
     poses.header.frame_id = frame_id_;
 	pub_.publish(poses);
+}
+
+/**
+ * Publish all obstruction lines which helps synchronizing the infrastructure
+ */
+void HumanflowBridgeNode::publishInfrastructurePose() {
+	if(publish_ == false) return;
+    lines.header.stamp = ros::Time::now();
+    lines.header.frame_id = frame_id_;
+	
+	if (lines.lines.empty()) // only calculate the first time
+	{
+		long sectionId = mpedController.getAssociatedSection();
+		// Add all obstruction lines here
+		mped::Section *section = mpedController.getInfrastructureSection(sectionId);
+		if (section == NULL)
+			return; // No associated section
+
+		long lineId = 1000;
+		std::vector<long> obstructionRegions = section->getObstructionRegions();
+		for (auto regionId = obstructionRegions.begin(); regionId != obstructionRegions.end(); regionId++)
+		{
+			mped::Region* region = mpedController.getInfrastructureRegion(*regionId);
+			if (region != NULL)
+			{
+				std::vector<long> shapeIds = region->getShapes();
+				for (auto shapeId = shapeIds.begin(); shapeId != shapeIds.end(); shapeId++)
+				{
+					mped::Shape* shape = mpedController.getInfrastructureShape(*shapeId);
+					if (shape != NULL) {
+						std::vector<double> x = shape->getX();
+						std::vector<double> y = shape->getY();
+						double z = shape->getZ();
+						for (unsigned int i=0; i < x.size(); i++) {
+							int endIndex=i+1;
+							transitbuddy_msgs::LineWithID line;
+							geometry_msgs::Point start;
+							geometry_msgs::Point end;
+							if (i == x.size()-1) // The last point: For polygons, wrap around
+							{
+								if (shape->getType() == "polygon")
+									endIndex = 0;
+								else
+									break;
+							}
+						
+							start.x = x[i];
+							start.y = y[i];
+							start.z = z;
+							end.x = x[endIndex];
+							end.y = y[endIndex];
+							end.z = z;
+
+							line.id = lineId++;
+							line.p.push_back(start);
+							line.p.push_back(end);
+							lines.lines.push_back(line);
+							// cout << "x:" << x.at(i) << " ";
+							// cout << "y:" << y.at(i) << " ";
+							// cout << endl;
+						}
+						delete shape;
+					}
+				}
+			}
+			delete region;
+		}
+		delete section;
+	}
+
+	ROS_DEBUG("publishInfrastructurePose: %d lines", lines.lines.size());
+	printf("publishInfrastructurePose: %d lines\n", lines.lines.size());
+	fflush(stdout);
+	pub_.publish(lines);
 }
