@@ -1,5 +1,17 @@
 Simulation starten
 
 set ROS_MASTER_URI=http://192.168.5.1:11311
-cd 
-C:\Users\ros\Documents\simulator\simulator\simulator.exe
+cd C:\Users\ros\Documents\simulator
+C:\Users\ros\Documents\simulator\simulator.exe
+
+
+Visual Studio Starten und Project HumanFlow_Bridge.sln öffnen
+
+In AIT Simulator den Hauptbahnhof öffnen und die Ebene0 auswählen
+
+Im Visual Studio das Programm starten (relaise)
+
+Die Simulation im AIT Simulator starten
+
+
+

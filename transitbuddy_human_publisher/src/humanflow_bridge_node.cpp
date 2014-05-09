@@ -209,6 +209,8 @@ void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDA
 }
 
 void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
+	
+	cout << msg.getMessageType() << endl;
 	if (msg.isInitMessage())
 	{
 		//onInit(msg);
@@ -261,6 +263,7 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 	}*/
 	else if (msg.equals("UPDATE_AGENTS"))
 	{
+		cout << "UPDATE_AGENTS" << endl;
 		vector<long> ids = msg.getLongArray("ids");
 		poses.poses.resize(ids.size());
 		int i = 0;
