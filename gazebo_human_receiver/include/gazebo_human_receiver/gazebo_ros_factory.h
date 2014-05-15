@@ -28,6 +28,7 @@
 #include <boost/interprocess/sync/scoped_lock.hpp>
 
 #include <transitbuddy_msgs/PoseWithIDArray.h>
+#include <transitbuddy_msgs/LineWithIDArray.h>
 #include <std_msgs/String.h>
 
 #include <gazebo_human_receiver/human_receiverConfig.h>
@@ -43,7 +44,8 @@ namespace gazebo {
       GazeboRosFactory();
       ~GazeboRosFactory();
       void Load(physics::WorldPtr _parent, sdf::ElementPtr _sdf);
-      void poseCallback(const transitbuddy_msgs::PoseWithIDArrayConstPtr& msg);
+      void humanCallback(const transitbuddy_msgs::PoseWithIDArrayConstPtr& msg);
+      void wallsCallback(const transitbuddy_msgs::LineWithIDArrayConstPtr& msg);
       void commandCallback(const std_msgs::String& msg);
       void callbackParameters ( gazebo_human_receiver::human_receiverConfig &config, uint32_t level );
 
@@ -56,21 +58,29 @@ namespace gazebo {
       boost::shared_ptr<ros::NodeHandle> n_param_;
       std::string robot_namespace_;
       ros::Subscriber subHumanPose_;
+      ros::Subscriber subWall_;
       ros::Subscriber subCommand_;
       dynamic_reconfigure::Server<gazebo_human_receiver::human_receiverConfig> reconfigureServer_;
       dynamic_reconfigure::Server<gazebo_human_receiver::human_receiverConfig>::CallbackType reconfigureFnc_;  
       void add(int id, const math::Pose& pose);
+      void addWall(int id, double x0, double y0, double x1, double y1);
+      void addWallModel();
       boost::interprocess::interprocess_mutex mutex_;
+      boost::interprocess::interprocess_mutex mutexWall_;
       std::map<int, math::Pose> humansToAdd_;
       std::list<int> humansToRemove_;
       std::list<int> humansInWorld_;
       std::vector<int> humansRemoved_;
+      std::vector<int> wallsInWorld_;
+      transitbuddy_msgs::LineWithIDArray walls_;
       boost::shared_ptr<boost::thread> addThread_;
       boost::shared_ptr<boost::thread> removeThead_;
       boost::shared_ptr<boost::thread> updateThead_;
+      boost::shared_ptr<boost::thread> wallThead_;
       void addTheadFnc();
       void removeTheadFnc();
       void updateHumansFnc();
+      void wallTheadFnc();
       double map_offset_x_, map_offset_y_, map_offset_angle_;
       transitbuddy_msgs::PoseWithIDArray msgHumans;
 

@@ -83,11 +83,13 @@ void RobotPublisherNode::callbackGazeboModel(const gazebo_msgs::ModelStates::Con
 	n_param_.getParam ( "oy", offset_map_.position.x );
 	for(int i = 0; i < msg->name.size(); i++){
 		std::string name( msg->name[i]);
-		if (name.compare("p2dx") == 0){
+		if (name.compare("r1") == 0){
 			robotPoses_.poses.resize(1);
-		    ROS_INFO ( "robot: %s, %f,%f,%f", name.c_str(), msg->pose[i].position.x, msg->pose[i].position.y, 0 );
-		    robotPoses_.poses[0].pose.position.x = msg->pose[i].position.x + offset_map_.position.x ;
-		    robotPoses_.poses[0].pose.position.y = msg->pose[i].position.y + offset_map_.position.y;
+            double x =  msg->pose[i].position.x + offset_map_.position.x;
+            double y =  msg->pose[i].position.y  + offset_map_.position.y;
+		    ROS_INFO ( "robot: %s, %f,%f,%f", name.c_str(), x, y, 0 );
+		    robotPoses_.poses[0].pose.position.x = x;
+		    robotPoses_.poses[0].pose.position.y = y;
 		}
 	}
 

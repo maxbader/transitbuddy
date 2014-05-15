@@ -1,2 +1,20 @@
 How to run the robot publisher:
+roscore
+
 rosrun transitbuddy_robot_publisher robot_publisher_node
+
+% Gazebo mit Raum
+roslaunch v4r_gazebo all.launch  room:=hbf world:=floor r1:=true r2:=false human_receiver:=true
+
+% Raum positionieren
+rosservice call gazebo/delete_model '{model_name: room}'
+rosrun gazebo_ros spawn_model -file /home/max/projects/catkin_ws/src/repo/v4r/v4r_gazebo/models/room_hbf_lvl0/model.sdf -sdf -model room -y -110 -x -172
+
+%Navigation
+roslaunch v4r_launch navigation.launch room:=hbf
+
+%Roboter steuerung
+roslaunch v4r_launch rviz_navigation.launch
+
+%Roboter pose
+rosrun v4r_launch init_pose.py 41 -56 3.14 r1 -23 -85 3.14 0.3 0.2

@@ -33,8 +33,8 @@
 #define NAME_PUB_ROBOTS "robot_pose"
 #define DEFAUTL_FRQ 10
 #define DEFAULT_FRAME_ID "world"
-#define OFFSET_X -132.0
-#define OFFSET_Y -109.0
+#define OFFSET_X 0.0
+#define OFFSET_Y 0.0
 #define OFFSET_ALPHA  0
 
 #endif // ROBOT_PUBLISHER_DEFAULTS_H
