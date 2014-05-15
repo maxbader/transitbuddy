@@ -31,6 +31,7 @@
 #include "ros/ros.h"
 #include <humanflow_bridge/humanflow_bridge_defaults.h>
 #include <transitbuddy_msgs/PoseWithIDArray.h>
+#include <transitbuddy_msgs/LineWithIDArray.h>
 
 #include "mpedplus/MpedClientAPI.h"
 #include "mpedplus/MpedMessage.h"
@@ -45,12 +46,14 @@ class HumanflowBridgeNode {
 			return frequency_;
 		}
   		void publishHumanPose();
+		void publishInfrastructurePose();
 		void handleMpedMessage(mped::MpedMessage &msg);
 
 	private:
 		vector<long> robotIds;
 		long sectionId;
 		transitbuddy_msgs::PoseWithIDArray poses;
+		transitbuddy_msgs::LineWithIDArray lines;
 
 		ros::NodeHandle n_;
 		ros::NodeHandle n_param_;
