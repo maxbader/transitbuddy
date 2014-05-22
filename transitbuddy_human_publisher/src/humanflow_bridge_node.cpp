@@ -125,7 +125,8 @@ HumanflowBridgeNode::HumanflowBridgeNode(ros::NodeHandle & n, mped::MpedClientAP
     ROS_INFO ( "frame_id: %s", frame_id_.c_str() );
     
 	sub_ = n_.subscribe( NAME_SUB, 1, &HumanflowBridgeNode::robotPoseCallback, this );
-	pub_ = n_param_.advertise<transitbuddy_msgs::PoseWithIDArray> ( "human_pose", 1 );
+	pubHuman_ = n_param_.advertise<transitbuddy_msgs::PoseWithIDArray> ( "human_pose", 1 );
+	pubWalls_ = n_param_.advertise<transitbuddy_msgs::LineWithIDArray> ( "walls", 1 );
 }
 
 HumanflowBridgeNode::~HumanflowBridgeNode(){
@@ -164,7 +165,7 @@ void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDA
 			// save the id
 			robotIds.push_back(id);
 		}
-
+		
 		// Update position
 		mped::MpedMessage *updateAgentMsg = mpedController.createMessage("UPDATE_AGENTS");
 		vector<long> newIds;
@@ -184,6 +185,7 @@ void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDA
 		pos.push_back(msg->poses[i].pose.position.z);
 		updateAgentMsg->setDoubleArray(posKey.str(), pos);
 		mpedController.sendMessage(updateAgentMsg);
+		ROS_INFO("Update robot: %d <%5.2f, %5.2f, %5.2f>", id, msg->poses[i].pose.position.x, msg->poses[i].pose.position.y, msg->poses[i].pose.position.z);
 		delete updateAgentMsg;
 	}
 
@@ -230,10 +232,8 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 		//onNextStep(msg->getLong("step"), msg->getDouble("stepDuration"), msg->getDouble("simulationDuration"));
 		long step = msg.getLong("step");
 		// and send the info to the ROS server
-		if (step % 2 == 0) // Every second
-			publishHumanPose();
-		if (step % 100 == 0) // Every 10 seconds
-			publishInfrastructurePose();
+		if (step % 10 == 0) publishHumanPose(); // Every x time			
+		// if (step % 200 == 0) publishInfrastructurePose(); // Every x th time
 	}
 	else if (msg.isShutdownMessage())
 	{
@@ -318,7 +318,7 @@ void HumanflowBridgeNode::publishHumanPose() {
 	ROS_DEBUG("publishHumanPose: %d humans", poses.poses.size());
     poses.header.stamp = ros::Time::now();
     poses.header.frame_id = frame_id_;
-	pub_.publish(poses);
+	pubHuman_.publish(poses);
 }
 
 /**
@@ -392,5 +392,5 @@ void HumanflowBridgeNode::publishInfrastructurePose() {
 	ROS_DEBUG("publishInfrastructurePose: %d lines", lines.lines.size());
 	printf("publishInfrastructurePose: %d lines\n", lines.lines.size());
 	fflush(stdout);
-	pub_.publish(lines);
+	pubWalls_.publish(lines);
 }

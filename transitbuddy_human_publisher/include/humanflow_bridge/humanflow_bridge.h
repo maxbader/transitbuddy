@@ -61,7 +61,8 @@ class HumanflowBridgeNode {
 		bool publish_;
 		std::string frame_id_;
   		ros::Subscriber sub_;
-		ros::Publisher pub_;
+		ros::Publisher pubHuman_;
+		ros::Publisher pubWalls_;
   		
 		mped::MpedClientAPI mpedController;
 };
