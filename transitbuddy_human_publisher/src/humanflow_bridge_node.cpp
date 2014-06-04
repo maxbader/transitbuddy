@@ -182,7 +182,7 @@ void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDA
 		vector<double> pos;
 		pos.push_back(msg->poses[i].pose.position.x);
 		pos.push_back(msg->poses[i].pose.position.y);
-		pos.push_back(msg->poses[i].pose.position.z);
+		pos.push_back(sectionZ);
 		updateAgentMsg->setDoubleArray(posKey.str(), pos);
 		mpedController.sendMessage(updateAgentMsg);
 		ROS_INFO("Update robot: %d <%5.2f, %5.2f, %5.2f>", id, msg->poses[i].pose.position.x, msg->poses[i].pose.position.y, msg->poses[i].pose.position.z);
@@ -216,7 +216,7 @@ void HumanflowBridgeNode::robotPoseCallback(const transitbuddy_msgs::PoseWithIDA
 
 void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 	
-	cout << msg.getMessageType() << endl;
+	// cout << msg.getMessageType() << endl;
 	if (msg.isInitMessage())
 	{
 		//onInit(msg);
@@ -268,19 +268,38 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 	else if (msg.equals("UPDATE_AGENTS"))
 	{
 		cout << "UPDATE_AGENTS" << endl;
+		//sectionId = mpedController.getAssociatedSection();
+		//long msgSection = msg.getLong("s");
+		//cout << "msg section: " << msgSection << endl;
+		//if (msgSection != sectionId)
+		//	return;
 		vector<long> ids = msg.getLongArray("ids");
+		int size = ids.size();
+		//if (size > 50)
+		//	cout << "size: " << size << ", section: " << msg.getLong("s") << endl;
 		poses.poses.resize(ids.size());
 		int i = 0;
+		bool correctSection = false;
 		for (vector<long>::iterator iter = ids.begin(); iter != ids.end(); iter++)
 		{
 			poses.poses[i].id = *iter;
 			stringstream ss; ss << (*iter); 
 			std::vector<double> pos = msg.getDoubleArray("p" + ss.str());
-			if (pos.size() >= 2)
+			/*long section = 0;
+			try
 			{
+				long section = msg.getLong("s" + ss.str());
+			} catch (exception e)
+			{
+			}*/
+
+			if (pos.size() >= 2 && pos[2] > sectionZ -0.0001 && pos[2] < sectionZ + 0.0001) // Mittlere Ebene = -7.162
+			{
+				correctSection = true;
 				poses.poses[i].valid = true;
 				poses.poses[i].pose.position.x = pos[0];
 				poses.poses[i].pose.position.y = pos[1];
+				poses.poses[i].pose.position.z = pos[2];
 			} else {
 				poses.poses[i].valid = false;
 			}
@@ -299,6 +318,8 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 				agentIter->second->position->x = pos[0];
 				agentIter->second->position->y = pos[1];
 			}*/
+			if (!correctSection)
+				poses.poses.clear();
 		}
 
 		// cout << "Ignoring update agents for now" << endl;
@@ -314,7 +335,7 @@ void HumanflowBridgeNode::handleMpedMessage(mped::MpedMessage &msg){
 
 
 void HumanflowBridgeNode::publishHumanPose() {
-	if(publish_ == false) return;
+	if(publish_ == false || poses.poses.empty()) return;
 	ROS_DEBUG("publishHumanPose: %d humans", poses.poses.size());
     poses.header.stamp = ros::Time::now();
     poses.header.frame_id = frame_id_;
@@ -336,6 +357,8 @@ void HumanflowBridgeNode::publishInfrastructurePose() {
 		mped::Section *section = mpedController.getInfrastructureSection(sectionId);
 		if (section == NULL)
 			return; // No associated section
+
+		sectionZ = section->getOrigin().at(2); // store the z coordinate
 
 		long lineId = 1000;
 		std::vector<long> obstructionRegions = section->getObstructionRegions();

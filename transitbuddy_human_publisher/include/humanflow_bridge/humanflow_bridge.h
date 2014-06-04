@@ -52,6 +52,7 @@ class HumanflowBridgeNode {
 	private:
 		vector<long> robotIds;
 		long sectionId;
+		double sectionZ;
 		transitbuddy_msgs::PoseWithIDArray poses;
 		transitbuddy_msgs::LineWithIDArray lines;
 
