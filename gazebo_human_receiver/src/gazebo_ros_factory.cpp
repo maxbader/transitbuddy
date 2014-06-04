@@ -1,5 +1,6 @@
 
 #include <gazebo_human_receiver/gazebo_ros_factory.h>
+#include <gazebo_human_receiver/gazebo_model_templates.h>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -21,54 +22,68 @@ void GazeboRosFactory::callbackParameters ( gazebo_human_receiver::human_receive
 void GazeboRosFactory::Load(physics::WorldPtr _parent, sdf::ElementPtr _sdf)
 {
     this->world_ = _parent;
-
     rosnode_ = boost::shared_ptr<ros::NodeHandle> ( new ros::NodeHandle () );
     n_param_ = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle("~"));
 
+    this->max_humans_=100;
+    if (!_sdf->HasElement("max_humans")) {
+        ROS_WARN("GazeboRosFactory Plugin (ns = %s) missing <max_humans>, defaults to %i",
+                 this->robot_namespace_.c_str(), this->max_humans_);
+    } else {
+        this->max_humans_ = _sdf->GetElement("max_humans")->Get<int>();
+    }
+    this->min_distance_between_humans_=0.5;
+    if (!_sdf->HasElement("min_distance_between_humans")) {
+        ROS_WARN("GazeboRosFactory Plugin (ns = %s) missing <min_distance_between_humans>, defaults to %f",
+                 this->robot_namespace_.c_str(), this->min_distance_between_humans_);
+    } else {
+        this->min_distance_between_humans_ = _sdf->GetElement("min_distance_between_humans")->Get<double>();
+    }
+    
+    if (!_sdf->HasElement("human_template_file")) {
+        ROS_ERROR("GazeboRosFactory Plugin (ns = %s) missing <human_template_file_>",
+                 this->robot_namespace_.c_str());
+    } else {
+        this->human_template_file_ = _sdf->GetElement("human_template_file")->Get<std::string>();
+    }
+    
     ROS_INFO ( "GazeboRosFactory");
-    //add("c1", math::Pose::Zero);
     subHumanPose_ = rosnode_->subscribe( "/human_publisher/human_pose", 1, &GazeboRosFactory::humanCallback, this );
     subCommand_ = rosnode_->subscribe( "/transitbuddy_dummy/command", 1, &GazeboRosFactory::commandCallback, this );
     // subWall_ = rosnode_->subscribe( "/human_publisher/walls", 1, &GazeboRosFactory::wallsCallback, this );
 
-    addThread_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::addTheadFnc, this));
-    removeThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::removeTheadFnc, this));
-    updateThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::updateHumansFnc, this));
-
+   updateThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::updateHumansFnc, this));
+    createHumansThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::createHumansFnc, this));
     reconfigureFnc_ = boost::bind(&GazeboRosFactory::callbackParameters, this,  _1, _2);
     reconfigureServer_.setCallback(reconfigureFnc_);
 
-    //wallThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::wallTheadFnc, this));
-    // addWall(10, 200, 0, 200, 200);
-/*
-    walls_.lines.resize(4);
-    walls_.lines[0].id = 0;
-    walls_.lines[0].p.resize(2);
-    walls_.lines[0].p[0].x = -10;
-    walls_.lines[0].p[0].y = -10;
-    walls_.lines[0].p[1].x =  10;
-    walls_.lines[0].p[1].y = -10;
-    walls_.lines[1].id = 1;
-    walls_.lines[1].p.resize(2);
-    walls_.lines[1].p[0].x =  10;
-    walls_.lines[1].p[0].y = -10;
-    walls_.lines[1].p[1].x =  10;
-    walls_.lines[1].p[1].y =  10;
-    
-    walls_.lines[2].id = 2;
-    walls_.lines[2].p.resize(2);
-    walls_.lines[2].p[0].x =  10;
-    walls_.lines[2].p[0].y =  10;
-    walls_.lines[2].p[1].x = -10;
-    walls_.lines[2].p[1].y =  10;
-    walls_.lines[3].id = 3;
-    walls_.lines[3].p.resize(2);
-    walls_.lines[3].p[0].x = -10;
-    walls_.lines[3].p[0].y =  10;
-    walls_.lines[3].p[1].x = -10;
-    walls_.lines[3].p[1].y = -10;
-    */
-    
+    wallThead_ = boost::shared_ptr<boost::thread>(new boost::thread(&GazeboRosFactory::wallTheadFnc, this));
+}
+
+void GazeboRosFactory::createHumansFnc() {
+    boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutexHumans_);
+    sleep(2);
+    int cols =  ceil(sqrt(max_humans_));
+    for(std::size_t id = 0; id < max_humans_; id++) {
+        int r = id / cols;
+        int c = id % cols;
+        math::Pose pose(min_distance_between_humans_*r, min_distance_between_humans_*c, 0, 0, 0, 0);
+        std::string name = idToName(id);
+        createHuman(name, pose);
+    }
+    ROS_INFO ( "create  %i humans:", max_humans_);
+    sleep(2);
+    humansInactive_.resize(max_humans_);
+    for(std::size_t id = 0; id < humansInactive_.size(); id ++) {
+        std::string name = idToName(id);
+        physics::ModelPtr p  = this->world_->GetModel(name);
+        if(p) {
+            humansInactive_[id] = p;
+        } else {
+            ROS_INFO ( "createHumansFnc: Could not get pointer to %s", name.c_str());
+        }
+    }
+    ROS_INFO ( "indexed humans:");
 }
 
 void GazeboRosFactory::wallTheadFnc() {
@@ -78,48 +93,100 @@ void GazeboRosFactory::wallTheadFnc() {
         if(walls_.lines.size() > 0)
         {
             loop = false;
-            boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutexWall_);
-            addWallModel();
+            boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock();
+
+            // addRoomModel(walls_);
+            for(unsigned int i = 0; i < walls_.lines.size(); i++) {
+                addWallModel(walls_.lines[i]);
+            }
+            ROS_INFO ( "wallTheadFnc");
         }
     }
 }
 
-void GazeboRosFactory::addWallModel() {
+void GazeboRosFactory::addWallModel(const transitbuddy_msgs::LineWithID &_wall) {
+    std::stringstream ss;
+    double dx = _wall.p[1].x - _wall.p[0].x;
+    double dy = _wall.p[1].y - _wall.p[0].y;
+    double l = sqrt(dx*dx + dy*dy);
+    double a = atan2(dy,dx);
+    double w = 0.2;
+    double h = 1.5;
+    double h2 = h*2;
+    double x = _wall.p[0].x + dx/2.;
+    double y = _wall.p[0].y + dy/2.;
+    std::string modelStr("\
+          <sdf version ='1.4'>\n\
+            <model name ='${model}'>\n\
+              <static>true</static>\n\
+              <link name ='${link}'>\n\
+              <pose>${x} ${y} ${h} 0 0 ${a}</pose>\n\
+              <collision name ='collision'>\n\
+                <pose>0 0 0 0 0 0</pose>\
+                <geometry>\n\
+                  <box><size>${l} ${w} ${h2}</size></box>\n\
+                </geometry>\n\
+              </collision>\n\
+              <visual name ='${visual}'>\n\
+                <pose>0 0 0 0 0 0</pose>\n\
+                <geometry>\n\
+                  <box><size>${l} ${w} ${h2}</size></box>\n\
+                </geometry>\n\
+              </visual>\n\
+            </link>\n\
+          </model>\n\
+        </sdf>\n");
+    boost::replace_all(modelStr, "${model}", std::string("w") + boost::lexical_cast<std::string>(_wall.id));
+    boost::replace_all(modelStr, "${link}",  std::string("l") + boost::lexical_cast<std::string>(_wall.id));
+    boost::replace_all(modelStr, "${visual}",  std::string("v") + boost::lexical_cast<std::string>(_wall.id));
+    boost::replace_all(modelStr, "${x}", boost::lexical_cast<std::string>(x));
+    boost::replace_all(modelStr, "${y}", boost::lexical_cast<std::string>(y));
+    boost::replace_all(modelStr, "${dx}", boost::lexical_cast<std::string>(dx));
+    boost::replace_all(modelStr, "${dy}", boost::lexical_cast<std::string>(dy));
+    boost::replace_all(modelStr, "${h}", boost::lexical_cast<std::string>(h));
+    boost::replace_all(modelStr, "${l}", boost::lexical_cast<std::string>(l));
+    boost::replace_all(modelStr, "${w}", boost::lexical_cast<std::string>(w));
+    boost::replace_all(modelStr, "${h2}", boost::lexical_cast<std::string>(h2));
+    boost::replace_all(modelStr, "${a}", boost::lexical_cast<std::string>(a));
+
+    sdf::SDF sdfModel;
+    sdfModel.SetFromString(modelStr);
+    this->world_->InsertModelSDF(sdfModel);
+}
+
+void GazeboRosFactory::addRoomModel(const transitbuddy_msgs::LineWithIDArray &_walls) {
     std::stringstream ss;
     ss << "<sdf version ='1.4'>" << std::endl;
-    ss << "  <link name='world'/>" << std::endl;
     ss << "  <model name ='walls'>" << std::endl;
-    for(unsigned int i = 0; i < walls_.lines.size(); i++) {
-        double dx = walls_.lines[i].p[0].x - walls_.lines[i].p[1].x;
-        double dy = walls_.lines[i].p[0].y - walls_.lines[i].p[1].y;
+    ss << "    <static>true</static>" << std::endl;
+    ss << "    <link name ='walls'>" << std::endl;
+    ss << "      <pose>0 0 .1 0 0 0</pose>" << std::endl;
+    for(unsigned int i = 0; i < _walls.lines.size(); i++) {
+        double dx = _walls.lines[i].p[1].x - _walls.lines[i].p[0].x;
+        double dy = _walls.lines[i].p[1].y - _walls.lines[i].p[0].y;
         double l = sqrt(dx*dx + dy*dy);
-        double a = atan2(dy, dx);
+        double a = atan2(dy,dx);
         double w = 0.2;
         double h = 1.5;
         double h2 = h*2;
-        double x = walls_.lines[i].p[0].x + dx/2.;
-        double y = walls_.lines[i].p[0].y + dy/2.;
-        std::string modelStr(
-          
-            "<joint name='${joint}' type='fixed'>\
-              <parent link='world'/>\
-              <child link='${link}'/>\
-            </joint>\
-            <link name ='${link}'>\
-            <pose>{x} ${y} ${h} 0 0 0</pose>\
-            <collision name ='collision'>\
-              <geometry>\
-                <box><size>${l} ${w} ${h2}</size></box>\
-              </geometry>\
-            </collision>\
-            <visual name ='visual'>\
-              <geometry>\
-                <box><size>${l} ${w} ${h2}</size></box>\
-              </geometry>\
-            </visual>\
-          </link>");
-        boost::replace_all(modelStr, "${joint}", std::string("j") + boost::lexical_cast<std::string>(walls_.lines[i].id));
-        boost::replace_all(modelStr, "${link}",  std::string("l") + boost::lexical_cast<std::string>(walls_.lines[i].id));
+        double x = _walls.lines[i].p[0].x + dx/2.;
+        double y = _walls.lines[i].p[0].y + dy/2.;
+        std::string modelStr("\n\
+              <collision name ='collision'>\n\
+                <pose>${x} ${y} ${h} 0 0 ${a}</pose>\n\
+                <geometry>\n\
+                  <box><size>${l} ${w} ${h2}</size></box>\n\
+                </geometry>\n\
+              </collision>\n\
+              <visual name ='${visual}'>\n\
+                <pose>${x} ${y} ${h} 0 0 ${a}</pose>\n\
+                <geometry>\n\
+                  <box><size>${l} ${w} ${h2}</size></box>\n\
+                </geometry>\n\
+              </visual>\n");
+        boost::replace_all(modelStr, "${joint}", std::string("j") + boost::lexical_cast<std::string>(_walls.lines[i].id));
+        boost::replace_all(modelStr, "${link}",  std::string("l") + boost::lexical_cast<std::string>(_walls.lines[i].id));
+        boost::replace_all(modelStr, "${visual}",  std::string("v") + boost::lexical_cast<std::string>(_walls.lines[i].id));
         boost::replace_all(modelStr, "${x}", boost::lexical_cast<std::string>(x));
         boost::replace_all(modelStr, "${y}", boost::lexical_cast<std::string>(y));
         boost::replace_all(modelStr, "${dx}", boost::lexical_cast<std::string>(dx));
@@ -131,199 +198,50 @@ void GazeboRosFactory::addWallModel() {
         boost::replace_all(modelStr, "${a}", boost::lexical_cast<std::string>(a));
         ss << modelStr;
     }
+    ss << "    </link>" << std::endl;
     ss << "  </model>" << std::endl;
     ss << "</sdf>" << std::endl;
     sdf::SDF sdfModel;
     std::string model = ss.str();
+    std::ofstream myfile;
+    myfile.open ("/tmp/model.xml");
+    myfile << model;
+    myfile.close();
     sdfModel.SetFromString(model);
     this->world_->InsertModelSDF(sdfModel);
 }
 
-void GazeboRosFactory::addWall(int id, double x0, double y0, double x1, double y1) {
-    std::vector<int>::iterator it = std::find (wallsInWorld_.begin(), wallsInWorld_.end(), 30);
-    if(it != wallsInWorld_.end()) return;
-    double dx = x1 - x0;
-    double dy = y1 - y0;
-    double l = sqrt(dx*dx + dy*dy);
-    double a = atan2(dy, dx);
-    double w = 0.2;
-    double h = 1.5;
-    double h2 = h*2;
-    double x = x0 + dx/2.;
-    double y = y0 + dy/2.;
-    std::string modelStr(
-        "<sdf version ='1.4'>\
-          <model name ='${name}'>\
-          <link name ='${link}'>\
-            <pose>0 0 ${h} 0 0 0</pose>\
-            <collision name ='collision'>\
-              <geometry>\
-                <box><size>${l} ${w} ${h2}</size></box>\
-              </geometry>\
-            </collision>\
-            <visual name ='visual'>\
-              <geometry>\
-                <box><size>${l} ${w} ${h2}</size></box>\
-              </geometry>\
-            </visual>\
-          </link>\
-        </model>\
-        </sdf>");
-
-    boost::replace_all(modelStr, "${name}", std::string("w") + boost::lexical_cast<std::string>(id));
-    boost::replace_all(modelStr, "${joint}", std::string("j") + boost::lexical_cast<std::string>(id));
-    boost::replace_all(modelStr, "${link}", std::string("l") + boost::lexical_cast<std::string>(id));
-    boost::replace_all(modelStr, "${x}", boost::lexical_cast<std::string>(x));
-    boost::replace_all(modelStr, "${y}", boost::lexical_cast<std::string>(y));
-    boost::replace_all(modelStr, "${dx}", boost::lexical_cast<std::string>(dx));
-    boost::replace_all(modelStr, "${dy}", boost::lexical_cast<std::string>(dy));
-    boost::replace_all(modelStr, "${h}", boost::lexical_cast<std::string>(h));
-    boost::replace_all(modelStr, "${l}", boost::lexical_cast<std::string>(l));
-    boost::replace_all(modelStr, "${w}", boost::lexical_cast<std::string>(w));
-    boost::replace_all(modelStr, "${h2}", boost::lexical_cast<std::string>(h2));
-    boost::replace_all(modelStr, "${a}", boost::lexical_cast<std::string>(a));
-    sdf::SDF sdfModel;
-    sdfModel.SetFromString(modelStr);
-    this->world_->InsertModelSDF(sdfModel);
-    wallsInWorld_.push_back(id);
-}
-
-void GazeboRosFactory::add(int id, const math::Pose &pose) {
+void GazeboRosFactory::createHuman(const std::string &name, const math::Pose &pose) {
     double radius = 0.2, length_viusal = 1.8, length_collision = 0.4, mass = 10;
     double half_length_visual = length_viusal/2.0;
     double half_length_collision = length_collision/2.0;
-    std::string modelStr(
-        "<sdf version ='1.4'>\
-          <model name ='${name}'>\
-            <pose>${pose}</pose>\
-            <link name ='link'>\
-              <pose>0 0 0 0 0 0</pose>\
-              <collision name ='collision'>\
-              <pose>0 0 ${half_length_collision} 0 0 0</pose>\
-                <geometry>\
-                   <box><size>${radius} ${radius} ${length_viusal}</size></box>\
-                </geometry>\
-                <surface>\
-                  <friction>\
-                    <ode>\
-                      <mu>0.0</mu>\
-                      <mu2>0.0</mu2>\
-                    </ode>\
-                  </friction>\
-                </surface>\
-              </collision>\
-              <visual name='visual'>\
-              <pose>0 0 ${half_length_visual} 0 0 0</pose>\
-                <geometry>\
-                   <box><size>${radius} ${radius} ${length_viusal}</size></box>\
-                </geometry>\
-              </visual>\
-              <inertial>\
-                <mass>${mass}</mass>\
-                <pose>0 0 -0.7 0 0 0</pose>\
-                <inertia>\
-                  <ixx>${ixx}</ixx>\
-                  <ixy>0.0</ixy>\
-                  <ixz>0.0</ixz>\
-                  <iyy>${iyy}</iyy>\
-                  <iyz>0.0</iyz>\
-                  <izz>${izz}</izz>\
-                </inertia>\
-              </inertial>\
-            </link>\
-          </model>\
-        </sdf>");
-    /*
- std::string modelStr(
-        "<sdf version ='1.4'>\
-          <model name ='${name}'>\
-            <pose>${pose}</pose>\
-            <link name ='link'>\
-              <pose>0 0 0 0 0 0</pose>\
-              <collision name ='collision'>\
-              <pose>0 0 -0.7 0 0 0</pose>\
-                <geometry>\
-                  <cylinder>\
-                    <radius>${radius}</radius>\
-                    <length>${length_collision}</length>\
-                  </cylinder>\
-                </geometry>\
-                <surface>\
-                  <friction>\
-                    <ode>\
-                      <mu>0.0</mu>\
-                      <mu2>0.0</mu2>\
-                    </ode>\
-                  </friction>\
-                </surface>\
-              </collision>\
-              <visual name='visual'>\
-                <geometry>\
-                  <cylinder>\
-                    <radius>${radius}</radius>\
-                    <length>${length_viusal}</length>\
-                  </cylinder>\
-                </geometry>\
-              </visual>\
-              <inertial>\
-                <mass>${mass}</mass>\
-                <pose>0 0 -0.7 0 0 0</pose>\
-                <inertia>\
-                  <ixx>${ixx}</ixx>\
-                  <ixy>0.0</ixy>\
-                  <ixz>0.0</ixz>\
-                  <iyy>${iyy}</iyy>\
-                  <iyz>0.0</iyz>\
-                  <izz>${izz}</izz>\
-                </inertia>\
-              </inertial>\
-            </link>\
-          </model>\
-        </sdf>");
- */
-    std::stringstream poseStr;
-    double ixx = 0.0833333 * mass * (3 * radius * radius + length_collision * length_collision);
-    double iyy = 0.0833333 * mass * (3 * radius * radius + length_collision * length_collision);
-    double izz = 0.5 * mass * radius * radius;
-    poseStr << pose.pos.x << " " << pose.pos.y << " " << pose.pos.z << " 0 0 0";
-    boost::replace_all(modelStr, "${name}", idToName(id));
-    boost::replace_all(modelStr, "${pose}", poseStr.str());
-    boost::replace_all(modelStr, "${radius}", boost::lexical_cast<std::string>(radius));
-    boost::replace_all(modelStr, "${half_length_visual}", boost::lexical_cast<std::string>(half_length_visual));
-    boost::replace_all(modelStr, "${half_length_collision}", boost::lexical_cast<std::string>(half_length_collision));
-    
-    boost::replace_all(modelStr, "${length_viusal}", boost::lexical_cast<std::string>(length_viusal));
-    boost::replace_all(modelStr, "${length_collision}", boost::lexical_cast<std::string>(length_collision));
-    boost::replace_all(modelStr, "${mass}", boost::lexical_cast<std::string>(mass));
-    boost::replace_all(modelStr, "${ixx}", boost::lexical_cast<std::string>( ixx));
-    boost::replace_all(modelStr, "${iyy}", boost::lexical_cast<std::string>( iyy));
-    boost::replace_all(modelStr, "${izz}", boost::lexical_cast<std::string>(izz));
+    std::string modelStr = GazeboModelTemplates::cylinderTemplate(human_template_file_, name, pose, radius, mass, length_viusal,half_length_collision);
     sdf::SDF sdfModel;
     sdfModel.SetFromString(modelStr);
     this->world_->InsertModelSDF(sdfModel);
-    humansInWorld_.push_back(id);
 }
 
 void GazeboRosFactory::commandCallback(const std_msgs::String& msg) {
-    boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutex_);
+    boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutexHumans_);
     if(msg.data.compare("clear") == 0) {
+        /*
         BOOST_FOREACH(int id, humansInWorld_) {
-            std::string name = idToName(id);
-            ROS_INFO ( "clearing %s", name.c_str());
-            physics::ModelPtr p  = this->world_->GetModel(name);
-            if(p) {
-                ROS_INFO ( "Fini() start", name.c_str());
-                sleep(1);
-                p->SetLinearVel(math::Vector3::Zero);
-                p->SetLinearAccel(math::Vector3::Zero);
-                p->Fini();
-                ROS_INFO ( "Fini() end", name.c_str());
-            } else {
-                ROS_INFO ( "clear failed %s", name.c_str());
-            }
-            sleep(10);
+          std::string name = idToName(id);
+          ROS_INFO ( "clearing %s", name.c_str());
+          physics::ModelPtr p  = this->world_->GetModel(name);
+          if(p) {
+              ROS_INFO ( "Fini() start", name.c_str());
+              sleep(1);
+              p->SetLinearVel(math::Vector3::Zero);
+              p->SetLinearAccel(math::Vector3::Zero);
+              p->Fini();
+              ROS_INFO ( "Fini() end", name.c_str());
+          } else {
+              ROS_INFO ( "clear failed %s", name.c_str());
+          }
+          sleep(10);
         }
-        humansInWorld_.clear();
+          */
     } else {
         ROS_INFO ( "commandCallback");
         //physics::ModelPtr p  = this->world_->GetModel("c1");
@@ -336,56 +254,6 @@ physics::ModelPtr GazeboRosFactory::getHuman(int id) {
     return world_->GetModel(name);
 }
 
-void GazeboRosFactory::addTheadFnc() {
-    while(true) {
-        sleep(2);
-        boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutex_);
-        std::stringstream ss;
-        for (std::map<int, math::Pose>::iterator it=humansToAdd_.begin(); it!=humansToAdd_.end(); ++it) {
-            int id = it->first;
-            math::Pose &pose = it->second;
-            physics::ModelPtr p  = getHuman(id);
-            if(!p) {
-                add(id, pose);
-                ss << id << ", ";
-            }
-        }
-        std::string listOfHumansAdded = ss.str();
-         ROS_INFO ( "added %s", listOfHumansAdded.c_str());
-        humansToAdd_.clear();
-
-    }
-}
-void GazeboRosFactory::removeTheadFnc() {
-    while(true) {
-
-        sleep(2);
-        boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutex_);
-        std::stringstream ss;
-        for (std::list<int>::iterator it=humansToRemove_.begin(); it!=humansToRemove_.end(); ++it) {
-            int id = *it;
-            ss << id << ", ";
-            physics::ModelPtr p  = getHuman(id);
-            if(p) {
-                ROS_INFO ( "remove %02i start", id);
-                double x = humansRemoved_.size()%20 + 300;
-                double y = -((double) humansRemoved_.size()/(double) 20.0) + 300;
-                p->SetLinearVel(math::Vector3::Zero);
-                p->SetLinearAccel(math::Vector3::Zero);
-                p->SetWorldPose(math::Pose(x, y, 0, 0,0,0));
-                humansInWorld_.remove(id);
-                humansRemoved_.push_back(id);
-                ROS_INFO ( "remove %02i done -> %4.2f,  %4.2f", id, x, y);
-            } else {
-                ROS_INFO ( "remove %02i failed", id);
-            }
-        }
-        std::string listOfHumansToRemive = ss.str();
-        ROS_INFO ( "remove %s", listOfHumansToRemive.c_str());
-
-    }
-}
-
 
 void GazeboRosFactory::wallsCallback(const transitbuddy_msgs::LineWithIDArrayConstPtr& msg) {
     boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutexWall_);
@@ -394,49 +262,85 @@ void GazeboRosFactory::wallsCallback(const transitbuddy_msgs::LineWithIDArrayCon
 
 
 void GazeboRosFactory::humanCallback(const transitbuddy_msgs::PoseWithIDArrayConstPtr& msg) {
-    boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutex_);
-    msgHumans = *msg;
+    if(mutexHumans_.try_lock()) {
+        msgHumans = *msg;
+        mutexHumans_.unlock();
+    }
+
 }
 
 void GazeboRosFactory::updateHumansFnc() {
+    int seq = msgHumans.header.seq;
     while(true) {
-        usleep(10000);
-        boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutex_);
-        math::Pose pose(0,0,0,0,0,0);
-        double ca = cos(map_offset_angle_), sa = sin(map_offset_angle_);
-        std::list<int> unused = humansInWorld_;
-        for(std::size_t i = 0; i < msgHumans.poses.size(); i++) {
-            int id = msgHumans.poses[i].id;
-            unused.remove(id);
-            const geometry_msgs::Point &pos = msgHumans.poses[i].pose.position;
-            double xw = ca * pos.x - sa * pos.y + map_offset_x_;
-            double yw = sa * pos.x + ca * pos.y + map_offset_y_;
-            double zw = 0.0;
-            math::Pose poseModel(xw, yw, zw, 0, 0,0);
-            physics::ModelPtr p  = getHuman(id);
-            if(!p) {
-                humansToAdd_[id] = poseModel;
-                //p = this->world_->GetModel(modelName);
-            } else {
+        usleep(100000);
+        if(seq != msgHumans.header.seq) {
+            seq = msgHumans.header.seq;
+            std::vector <int> logAdded;
+            std::vector <int> logMoved;
+            std::vector <int> logRemoved;
+            boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(mutexHumans_);
+            math::Pose pose(0,0,0,0,0,0);
+            double ca = cos(map_offset_angle_), sa = sin(map_offset_angle_);
+            physics::ModelPtr p;
+            std::map<int,physics::ModelPtr>::iterator it;
+            std::map<int, physics::ModelPtr> lasthumansActive = humansActive_;
+            humansActive_.clear();
+            for(std::size_t i = 0; i < msgHumans.poses.size(); i++) {
+                if (msgHumans.poses[i].valid == false) continue;
+                const geometry_msgs::Point &pos = msgHumans.poses[i].pose.position;
+                double xw = ca * pos.x - sa * pos.y + map_offset_x_;
+                double yw = sa * pos.x + ca * pos.y + map_offset_y_;
+                double zw = 0.0;
+                xw = pos.x;
+                yw = pos.y;
+                zw = 0;
+                math::Pose poseModel(xw, yw, zw, 0, 0, 0);
+                it = lasthumansActive.find(msgHumans.poses[i].id);
+                if(it == lasthumansActive.end()) {
+                    if(humansInactive_.empty()) {
+                        ROS_INFO ( "updateHumansFnc: out of humans");
+                        continue;
+                    } else {
+                        p = humansInactive_.back();
+                        humansInactive_.pop_back();
+                        p->SetWorldPose(poseModel);
+                        p->SetStatic(false);
+                    }
+                } else {
+                    p = it->second;
+                    lasthumansActive.erase(it);
+                }
+                humansActive_[msgHumans.poses[i].id] = p;
                 const math::Pose &current =  p->GetWorldPose();
                 math::Vector3 diff = poseModel.pos - current.pos;
-                /*
-                if(fabs(current.rot.x) + fabs(current.rot.y) + fabs(current.rot.z) < 0.01) {
-                    p->SetLinearVel(math::Vector3(diff.x, diff.y, -0));
-                } else {
-                    p->SetWorldPose(math::Pose(poseModel.pos.x, poseModel.pos.y, 0, 0,0,0));
-                    p->SetLinearVel(math::Vector3(diff.x, diff.y, -0));
-                }
-                */
-                p->SetWorldPose(math::Pose(poseModel.pos.x, poseModel.pos.y, 0, 0,0,0));
+                p->SetLinearVel(math::Vector3(diff.x, diff.y, -0));
+                p->SetAngularVel(math::Vector3::Zero);
+                p->SetAngularAccel(math::Vector3::Zero);
+             }
+            int cols =  ceil(sqrt(max_humans_));
+            for (it = lasthumansActive.begin(); it!=lasthumansActive.end(); ++it) {
+                p = it->second;
+                int id = humansInactive_.size();
+                humansInactive_.push_back(p);
+                int r = id / cols;
+                int c = id % cols;
+                math::Pose pose(min_distance_between_humans_*r, min_distance_between_humans_*c, 0, 0, 0, 0);
+                p->SetStatic(true);
+                p->SetAngularVel(math::Vector3::Zero);
+                p->SetAngularAccel(math::Vector3::Zero);
+                p->SetLinearVel(math::Vector3::Zero);
+                p->SetLinearAccel(math::Vector3::Zero);
+                p->SetWorldPose(pose);
             }
-            //p->SetWorldPose(poseModel);
+            
+            ROS_INFO("GazeboRosFactory Plugin (ns = %s) active humans  %i",
+                 this->robot_namespace_.c_str(), (int) humansActive_.size());
+  
         }
-        humansToRemove_ = unused;
-        //p->SetLinearVel(math::Vector3(.03, 0, 0));
     }
 }
 
 // Register this plugin with the simulator
 GZ_REGISTER_WORLD_PLUGIN(GazeboRosFactory)
 }
+

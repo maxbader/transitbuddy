@@ -1,20 +1,24 @@
 How to run the robot publisher:
 roscore
 
+% Gazebo mit Raum
+roslaunch v4r_gazebo all.launch  room:=hbf_gernated world:=floor r1:=true r2:=true human_receiver:=true r1_pos:="-x -23 -y -65 -R 0.0 -Y 3.13" r2_pos:="-x -23 -y -66 -R 0.0 -Y 3.13"
+
+% Robot Pose publisher
 rosrun transitbuddy_robot_publisher robot_publisher_node
 
-% Gazebo mit Raum
-roslaunch v4r_gazebo all.launch  room:=hbf world:=floor r1:=true r2:=false human_receiver:=true
-
-% Raum positionieren
-rosservice call gazebo/delete_model '{model_name: room}'
-rosrun gazebo_ros spawn_model -file /home/max/projects/catkin_ws/src/repo/v4r/v4r_gazebo/models/room_hbf_lvl0/model.sdf -sdf -model room -y -110 -x -172
-
 %Navigation
-roslaunch v4r_launch navigation.launch room:=hbf
+# Roboter r1
+roslaunch v4r_launch navigation.launch room:=hbf env:=sim cfg_move_base:=01  robot_name:=r1
+# Roboter r2
+roslaunch v4r_launch navigation.launch room:=hbf env:=sim cfg_move_base:=01  robot_name:=r2 
 
-%Roboter steuerung
+% Roboter im Raum positionieren
+# Roboter r1
+rosrun v4r_launch init_pose.py -140 -146 3.14 r1 -23 -65 3.14 0.3 0.2
+# Roboter r2
+rosrun v4r_launch init_pose.py -140 -147 3.14 r2 -23 -66 3.14 0.3 0.2
+
+%Roboter steuerung & visualisierung
 roslaunch v4r_launch rviz_navigation.launch
 
-%Roboter pose
-rosrun v4r_launch init_pose.py 41 -56 3.14 r1 -23 -85 3.14 0.3 0.2

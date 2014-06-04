@@ -30,7 +30,7 @@
 
 int main(int argc, char **argv)
 {
-        
+
     ros::init ( argc, argv, "robot_publisher" );
     ros::NodeHandle n;
     RobotPublisherNode bridge ( n );
@@ -48,61 +48,65 @@ RobotPublisherNode::RobotPublisherNode(ros::NodeHandle & n) : n_ ( n ), n_param_
     offset_map_.position.x = OFFSET_X;
     offset_map_.position.y = OFFSET_Y;
 
-    if(!n_param_.getParam ( "ox", offset_map_.position.x )){
-    	n_param_.setParam ( "ox", offset_map_.position.x);
+    if(!n_param_.getParam ( "ox", offset_map_.position.x )) {
+        n_param_.setParam ( "ox", offset_map_.position.x);
     }
     ROS_INFO ( "ox: %5.2f", offset_map_.position.x);
-    if(!n_param_.getParam ( "oy", offset_map_.position.y )){
-    	n_param_.setParam ( "oy", offset_map_.position.y);
+    if(!n_param_.getParam ( "oy", offset_map_.position.y )) {
+        n_param_.setParam ( "oy", offset_map_.position.y);
     }
     ROS_INFO ( "oy: %5.2f", offset_map_.position.y);
     n_param_.getParam ( "frequency", frequency_ );
     ROS_INFO ( "frequency: %5.2f", frequency_ );
-    
+
     n_param_.getParam ( "publish", publish_ );
     ROS_INFO ( "publish: %s", (publish_?"true":"false") );
-    
+
     n_param_.getParam ( "frame_id", frame_id_ );
     ROS_INFO ( "frame_id: %s", frame_id_.c_str() );
-    
+
     robotPoses_.header.seq = 0;
     sub_ = n_.subscribe( NAME_SUB_HUMANS, 1, &RobotPublisherNode::callbackHumanPose, this );
     sub_ = n_.subscribe( NAME_SUB_GAZEBO_MODELS, 1, &RobotPublisherNode::callbackGazeboModel, this );
     pub_ = n_param_.advertise<transitbuddy_msgs::PoseWithIDArray> ( NAME_PUB_ROBOTS, 1 );
 }
 
-RobotPublisherNode::~RobotPublisherNode(){
+RobotPublisherNode::~RobotPublisherNode() {
 }
 
-void RobotPublisherNode::callbackHumanPose(const transitbuddy_msgs::PoseWithIDArray::ConstPtr& msg){
-    ROS_INFO ( "%i human pose received: ", msg->poses.size());
+void RobotPublisherNode::callbackHumanPose(const transitbuddy_msgs::PoseWithIDArray::ConstPtr& msg) {
+    ROS_INFO ( "%i human pose received: ", (int) msg->poses.size());
 }
 
-void RobotPublisherNode::callbackGazeboModel(const gazebo_msgs::ModelStates::ConstPtr& msg){
-	n_param_.getParam ( "ox", offset_map_.position.x );
-	n_param_.getParam ( "oy", offset_map_.position.x );
-	for(int i = 0; i < msg->name.size(); i++){
-		std::string name( msg->name[i]);
-		if (name.compare("r1") == 0){
-			robotPoses_.poses.resize(1);
-            double x =  msg->pose[i].position.x + offset_map_.position.x;
-            double y =  msg->pose[i].position.y  + offset_map_.position.y;
-		    ROS_INFO ( "robot: %s, %f,%f,%f", name.c_str(), x, y, 0 );
-		    robotPoses_.poses[0].pose.position.x = x;
-		    robotPoses_.poses[0].pose.position.y = y;
-		}
-	}
+void RobotPublisherNode::callbackGazeboModel(const gazebo_msgs::ModelStates::ConstPtr& msg) {
+    n_param_.getParam ( "ox", offset_map_.position.x );
+    n_param_.getParam ( "oy", offset_map_.position.x );
+    robotPoses_.poses.clear();
+    for(int i = 0; i < msg->name.size(); i++) {
+        std::string name( msg->name[i]);
+        transitbuddy_msgs::PoseWithID robot;
+        robot.pose.position.x =  msg->pose[i].position.x + offset_map_.position.x;
+        robot.pose.position.y =  msg->pose[i].position.y + offset_map_.position.y;
+        robot.pose.position.z = 0;
+        robot.valid = true;
+        if (name.compare("r1") == 0) {
+            robot.id = 1;
+            ROS_INFO ( "robot: %s, %f,%f,%f", name.c_str(), robot.pose.position.x, robot.pose.position.y, robot.pose.position.z );
+            robotPoses_.poses.push_back(robot);
+        }
+        if (name.compare("r2") == 0) {
+            robot.id = 2;
+            ROS_INFO ( "robot: %s, %f,%f,%f", name.c_str(), robot.pose.position.x, robot.pose.position.y, robot.pose.position.z );
+            robotPoses_.poses.push_back(robot);
+        }
+    }
 
 }
-void RobotPublisherNode::publishRobotPose(){
+void RobotPublisherNode::publishRobotPose() {
     if(publish_ == false) return;
-    transitbuddy_msgs::PoseWithIDArray &poses = robotPoses_;
-    poses.header.seq++;
+    robotPoses_.header.seq++;
     if(robotPoses_.header.seq % 10 == 0) ROS_INFO ( "publish robot pose %i", robotPoses_.header.seq);
-    poses.header.stamp = ros::Time::now();
-    poses.header.frame_id = frame_id_;
-    poses.poses.resize(1);
-    poses.poses[0].id = 0;
-    poses.poses[0].valid = true;
-    pub_.publish(poses);
+    robotPoses_.header.stamp = ros::Time::now();
+    robotPoses_.header.frame_id = frame_id_;
+    pub_.publish(robotPoses_);
 }

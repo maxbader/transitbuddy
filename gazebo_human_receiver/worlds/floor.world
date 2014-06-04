@@ -8,7 +8,22 @@
     <include>
       <uri>model://sun</uri>
     </include>
-
-    <plugin name="human_receiver" filename="libgazebo_ros_human_receiver.so"/>
+    <physics type='ode'>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+      <gravity>0 0 -9.8</gravity>
+    </physics>
+    <gui fullscreen='0'>
+      <camera name='user_camera'>
+        <pose>-57.1994 -78.0094 23.4645 -1.65872e-17 0.579643 0.468195</pose>
+        <view_controller>orbit</view_controller>
+      </camera>
+    </gui>
+    <plugin name="human_receiver" filename="libgazebo_ros_human_receiver.so">
+        <max_humans>100</max_humans>
+        <min_distance_between_humans>0.5</min_distance_between_humans>
+        <human_template_file>/home/max/projects/catkin_ws/src/transitbuddy/gazebo_human_receiver/models/human/cylinder_template.sdf</human_template_file>
+    </plugin>
   </world>
 </sdf>
